@@ -50,12 +50,13 @@ def train(args, model, optimizer, writer):
             audio = audio.to(args.device)
 
             # forward
-            nce_loss, trpl_loss = model(audio, anc_mel, pos_mel, neg_mel)
+            nce_loss, trpl_loss, recons_loss = model(audio, anc_mel, pos_mel, neg_mel)
             nce_loss = nce_loss.mean()
             trpl_loss = trpl_loss.mean()
+            recons_loss = recons_loss.mean()
 
             # accumulate losses for all GPUs
-            loss = nce_loss + trpl_loss
+            loss = nce_loss + trpl_loss + recons_loss
 
             # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10)
 
@@ -73,7 +74,7 @@ def train(args, model, optimizer, writer):
                 examples_per_second = args.batch_size / (time.time() - start_time)
                 print(
                     "[Epoch {}/{}] Train step {:04d}/{:04d} \t Examples/s = {:.2f} \t "
-                    "Loss = {:.4f} \t NCE = {:.4f} \t Triplet = {:.4f} \t Time/step = {:.4f}".format(
+                    "Loss = {:.4f} \t NCE = {:.4f} \t Triplet = {:.4f} \t Recons = {:.4f} \t Time/step = {:.4f}".format(
                         epoch,
                         args.num_epochs,
                         step,
@@ -82,6 +83,7 @@ def train(args, model, optimizer, writer):
                         loss,
                         nce_loss,
                         trpl_loss,
+                        recons_loss,
                         time.time() - start_time,
                     )
                 )
@@ -89,6 +91,7 @@ def train(args, model, optimizer, writer):
             writer.add_scalar("Loss/train_step", loss, global_step)
             writer.add_scalar("Loss/nce", nce_loss, global_step)
             writer.add_scalar("Loss/triplet", trpl_loss, global_step)
+            writer.add_scalar("Loss/recons", recons_loss, global_step)
             loss_epoch += loss
             global_step += 1
 
@@ -119,7 +122,8 @@ def train(args, model, optimizer, writer):
             save_model(args, model, optimizer, best=True)
 
         # save current model state
-        save_model(args, model, optimizer)
+        if args.current_epoch % 10 == 0:
+            save_model(args, model, optimizer)
         args.current_epoch += 1
 
 

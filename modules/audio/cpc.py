@@ -1,8 +1,15 @@
 import torch
+
+from .decoder import Decoder
 from .encoder import Encoder
 from .autoregressor import Autoregressor
 from .infonce import InfoNCE
 from .resnet import ResNetSimCLR
+
+
+def l2norm(p, q):
+    return torch.mean(torch.norm(p - q, dim=1))
+
 
 class CPC(torch.nn.Module):
     def __init__(
@@ -17,6 +24,7 @@ class CPC(torch.nn.Module):
         sequence of latent representations zt = genc(xt), potentially with a lower temporal resolution.
         """
         self.encoder = Encoder(genc_input, genc_hidden, strides, filter_sizes, padding,)
+        self.decoder = Decoder()
 
         """
         We then use a GRU RNN [17] for the autoregressive part of the model, gar with 256 dimensional hidden state.
@@ -24,6 +32,7 @@ class CPC(torch.nn.Module):
         self.autoregressor = Autoregressor(args, input_dim=genc_hidden, hidden_dim=gar_hidden)
 
         self.loss = InfoNCE(args, gar_hidden, genc_hidden)
+        self.recons_loss = torch.nn.MSELoss()
         self.static_encoder = ResNetSimCLR('resnet50', 256)
         self.triplet_loss = torch.nn.TripletMarginLoss(5.0)
 
@@ -59,14 +68,16 @@ class CPC(torch.nn.Module):
         # TODO checked
         return z
 
-
     def forward(self, x, anc, pos, neg):
         # x: (b, 1, 20480)
         z = self.get_latent_representations(x)
         ca, cp, cn = self.static_encoder(anc), self.static_encoder(pos), self.static_encoder(neg)
         ca, cp, cn = ca.squeeze(), cp.squeeze(), cn.squeeze()
         # z: (b, 128, 512) c: (b, 128, 256)
-        loss, accuracy = self.loss.get(x, z, ca.unsqueeze(1).expand(-1, 128, -1))
+        c = ca.unsqueeze(1).expand(-1, 128, -1)
+        loss, accuracy = self.loss.get(x, z, c)
         trpl_loss = self.triplet_loss(ca, cp, cn)
-        return loss, trpl_loss, accuracy, z, ca
+        x_hat = self.decoder(torch.cat([z, c], dim=-1))
+        recons_loss = self.recons_loss(x, x_hat)
+        return loss, trpl_loss, recons_loss, accuracy, z, ca
 

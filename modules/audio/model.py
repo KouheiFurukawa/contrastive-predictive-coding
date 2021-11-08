@@ -29,5 +29,5 @@ class Model(torch.nn.Module):
     def forward(self, x, anc_mel, pos_mel, neg_mel):
         """Forward through the network"""
 
-        loss, trpl_loss, accuracy, _, z = self.model(x, anc_mel, pos_mel, neg_mel)
-        return loss, trpl_loss
+        loss, trpl_loss, recons_loss, accuracy, _, z = self.model(x, anc_mel, pos_mel, neg_mel)
+        return loss, trpl_loss, recons_loss
