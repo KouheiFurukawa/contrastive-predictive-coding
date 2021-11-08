@@ -4,6 +4,11 @@ from .autoregressor import Autoregressor
 from .infonce import InfoNCE
 from .resnet import ResNetSimCLR
 
+
+def l2norm(p, q):
+    return torch.mean(torch.norm(p - q, dim=1))
+
+
 class CPC(torch.nn.Module):
     def __init__(
         self, args, strides, filter_sizes, padding, genc_input, genc_hidden, gar_hidden,
@@ -59,12 +64,12 @@ class CPC(torch.nn.Module):
         # TODO checked
         return z
 
-
     def forward(self, x, anc, pos, neg):
         # x: (b, 1, 20480)
         z = self.get_latent_representations(x)
         ca, cp, cn = self.static_encoder(anc), self.static_encoder(pos), self.static_encoder(neg)
         ca, cp, cn = ca.squeeze(), cp.squeeze(), cn.squeeze()
+        # print(l2norm(ca, cn) - l2norm(ca, cp), l2norm(ca, cn), l2norm(ca, cp))
         # z: (b, 128, 512) c: (b, 128, 256)
         loss, accuracy = self.loss.get(x, z, ca.unsqueeze(1).expand(-1, 128, -1))
         trpl_loss = self.triplet_loss(ca, cp, cn)
